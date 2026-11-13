@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Badge, Button, Kpi, Panel } from "./components";
 import PortScene from "./PortScene";
-import smartMarshLogo from "./assets/smartmarsh-logo.jpg";
+import smartMarshLogo from "./smartmarsh-logo.jpg";
 import EventLog from "./EventLog";
 import {
   clock,
