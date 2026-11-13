@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { Disclaimer } from "./components";
 import { downloadProjectArchive } from "./projectDownload";
-import smartMarshLogo from "./assets/smartmarsh-logo.jpg";
+import smartMarshLogo from "./smartmarsh-logo.jpg";
 import {
   DEFAULTS,
   simulate,
