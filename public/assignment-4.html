@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartMarsh | Assignment 4 Simulation</title>
+<style>
+:root{font:16px system-ui;color:#132e42;background:#edf4f7}*{box-sizing:border-box}body{margin:0}header{background:#102d42;color:#fff;padding:27px max(20px,calc((100% - 1100px)/2))}header a{color:#a0e7d7}h1{margin:6px 0}p{line-height:1.5}main{max-width:1140px;margin:auto;padding:20px}.card{background:#fff;border:1px solid #d3e0e7;border-radius:14px;padding:18px;margin:0 0 16px}h2,h3{margin:0 0 12px}.controls,.lane{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.controls input{flex:1;min-width:140px;accent-color:#08736a}button,select{font:inherit;border:1px solid #aac4ce;border-radius:7px;padding:8px;background:white;color:#132e42}button{cursor:pointer}.primary{background:#08736a;color:white;border-color:#08736a}output{min-width:88px;font-variant-numeric:tabular-nums}.yard{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px;margin-top:15px}.zone{padding:14px;border-radius:9px;background:#eef5f5;min-height:122px}.lane{gap:7px}.truck{display:inline-block;padding:5px 8px;border-radius:6px;background:#d4efe8;color:#16483d;font-weight:650}.on{background:#ffe6b6;color:#654000}.gate{padding:9px;margin:6px 0;border-left:4px solid #08736a;background:#e3f3eb}.busy{border-color:#426987;background:#e5edf6}.reserved{border-color:#bf7a00;background:#fff0ce}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.summary div{background:#e3f2ef;padding:12px;border-radius:8px}.summary strong{display:block;font-size:1.45rem}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:8px;border-bottom:1px solid #dce7eb}thead{background:#edf4f7}.muted{color:#486272}.scroll{overflow:auto}details{margin-top:12px}@media(max-width:650px){.yard,.summary{grid-template-columns:1fr}th,td{padding:6px}}
+</style>
+<header><a href="./">SmartMarsh</a><h1>Assignment 4 Simulation</h1><span>Report scenario · 8 trucks · 2 gates · fixed inputs from Appendix D</span></header>
+<main>
+<section class="card" id="operations">
+<h2>Terminal at the selected time</h2>
+<div class="controls"><label>Policy <select id="policy"><option value="smart">SmartMarsh</option><option value="traditional">Traditional queue</option></select></label><button id="play" class="primary">Play</button><button id="reset">Reset</button><label for="time">Minute</label><input id="time" type="range" min="0" max="42" step=".5" value="0"><output id="clock" for="time"></output></div>
+<div class="yard"><article class="zone"><h3 id="queueTitle"></h3><div class="lane" id="queue"></div></article><article class="zone"><h3>Preparing or moving</h3><div id="moving"></div></article><article class="zone"><h3>Service gates</h3><div id="gates"></div></article></div>
+<p id="status" class="muted"></p>
+</section>
+<section class="card" id="comparison">
+<h2>Completed-run comparison</h2>
+<div class="summary" id="summary"></div>
+<div class="scroll"><table><thead><tr><th>Metric</th><th>Traditional</th><th>SmartMarsh</th></tr></thead><tbody id="metrics"></tbody></table></div>
+<p class="muted">Stationary engine-on time excludes travel and service. Service utilization uses the common 42-minute window and includes 10 gate-minutes from the earlier trucks.</p>
+</section>
+<section class="card"><h2>Appendix D event trace</h2><div class="scroll"><table><thead><tr><th>Truck</th><th>Arrival</th><th>Eligible</th><th>Gate</th><th>Call</th><th>Ack</th><th>Start</th><th>Finish</th><th>Idle</th></tr></thead><tbody id="trace"></tbody></table></div>
+<details><summary>Timing assumptions</summary><p>Both runs use arrivals [0, 1, 2, 4, 7, 8, 11, 14] and service durations [5, 6, 4, 7, 5, 6, 4, 5] in minutes. G1 and G2 are initially occupied until minute 4 and 6, respectively. FCFS assigns the first eligible truck. A tie between gates goes to G1.</p><p>Traditional trucks are eligible upon arrival and travel for one minute after the call. SmartMarsh trucks reach staging one minute after arrival, acknowledge after 0.5 minute with engines off, prepare for 0.5 minute with engines on, and travel for two minutes.</p></details></section>
+</main>
+<script>
+const arrivals = [0, 1, 2, 4, 7, 8, 11, 14];
+const service = [5, 6, 4, 7, 5, 6, 4, 5];
+const initial = [4, 6];
+
+function simulate(smart) {
+  const free = [...initial];
+  return arrivals.map((arrival, index) => {
+    const eligible = arrival + (smart ? 1 : 0);
+    const calls = free.map(release => Math.max(eligible, release));
+    const gate = calls[0] <= calls[1] ? 0 : 1;
+    const call = calls[gate];
+    const ack = smart ? call + .5 : null;
+    const depart = smart ? ack + .5 : call;
+    const start = depart + (smart ? 2 : 1);
+    const finish = start + service[index];
+    free[gate] = finish;
+    return {id:'T'+(index+1),arrival,eligible,gate,call,ack,depart,start,finish,idle:smart ? depart-ack : call-eligible};
+  });
+}
+
+const runs = {traditional:simulate(false),smart:simulate(true)};
+function metrics(trips) {
+  const sum = fn => trips.reduce((total,trip)=>total+fn(trip),0);
+  return {idle:sum(t=>t.idle), wait:sum(t=>t.call-t.eligible)/trips.length,
+    pre:sum(t=>t.start-t.arrival)/trips.length, turn:sum(t=>t.finish-t.arrival)/trips.length,
+    finish:Math.max(...trips.map(t=>t.finish)),
+    peak:Math.max(...trips.map(t=>trips.filter(q=>q.eligible<=t.eligible && q.call>t.eligible).length)),
+    reserve:sum(t=>t.start-t.call)};
+}
+
+const $ = id=>document.getElementById(id);
+const a=metrics(runs.traditional),b=metrics(runs.smart);
+const saved=((a.idle-b.idle)/a.idle*100).toFixed(1);
+const utilization=((service.reduce((x,y)=>x+y,0)+initial[0]+initial[1])/ (2*Math.max(a.finish,b.finish))*100).toFixed(1)+'%';
+const row = values=>'<tr>'+values.map(v=>'<td>'+v+'</td>').join('')+'</tr>';
+$('metrics').innerHTML=[
+  ['Stationary engine-on time (truck-min)',a.idle,b.idle],['Mean eligible queue time (min)',a.wait,b.wait],
+  ['Mean pre-service time (min)',a.pre,b.pre],['Mean turnaround (min)',a.turn,b.turn],
+  ['Last completion (min)',a.finish,b.finish],['Peak eligible queue (trucks)',a.peak,b.peak],
+  ['Pre-service gate reservations (gate-min)',a.reserve,b.reserve],['Service utilization',utilization,utilization]
+].map(row).join('');
+$('summary').innerHTML='<div><strong>'+saved+'%</strong>Less stationary engine-on time</div><div><strong>+'+(b.turn-a.turn)+'</strong>Mean turnaround (min/truck)</div><div><strong>'+a.finish+' → '+b.finish+'</strong>Last completion (min)</div>';
+
+function draw(){
+  const key=$('policy').value, smart=key==='smart', trips=runs[key], now=Number($('time').value);
+  $('clock').textContent=now.toFixed(1)+' / 42';
+  $('queueTitle').textContent=smart?'Engine-off staging':'Engine-on queue';
+  const waiting=trips.filter(t=>t.eligible<=now && now<t.call);
+  $('queue').innerHTML=waiting.map(t=>'<span class="truck '+(smart?'':'on')+'">'+t.id+'</span>').join('')||'Empty';
+  const moving=[];
+  for(const t of trips){
+    if(t.arrival<=now && now<t.eligible) moving.push(t.id+' · to staging');
+    if(t.call<=now && now<t.start){
+      const phase=smart && now<t.ack?'Awaiting acknowledgement':now<t.depart?'Engine-on preparation':'Moving to gate';
+      moving.push(t.id+' · '+phase+' · G'+(t.gate+1));
+    }
+  }
+  $('moving').innerHTML=moving.join('<br>')||'None';
+  $('gates').innerHTML=initial.map((end,gate)=>{
+    const truck=trips.find(t=>t.gate===gate && t.call<=now && now<t.finish);
+    const state=truck?(now<truck.start?'Reserved':'Busy'):now<end?'Busy':'Available';
+    const label=truck?' · '+truck.id:now<end?' · Earlier truck':'';
+    return '<div class="gate '+state.toLowerCase()+'"><strong>G'+(gate+1)+' · '+state+'</strong>'+label+'</div>';
+  }).join('');
+  $('status').textContent=trips.filter(t=>t.arrival<=now).length+' of 8 arrived · '+trips.filter(t=>t.finish<=now).length+' of 8 completed';
+  $('trace').innerHTML=trips.map(t=>row([t.id,t.arrival,t.eligible,'G'+(t.gate+1),t.call,t.ack??'—',t.start,t.finish,t.idle])).join('');
+}
+
+let timer;
+function pause(){clearInterval(timer);timer=undefined;$('play').textContent='Play';}
+$('play').onclick=()=>{
+  if(timer!==undefined){pause();return;}
+  if(Number($('time').value)>=42)$('time').value=0;
+  $('play').textContent='Pause';
+  draw();
+  timer=setInterval(()=>{
+    $('time').value=Number($('time').value)+.5;
+    draw();
+    if(Number($('time').value)>=42)pause();
+  },260);
+};
+$('reset').onclick=()=>{pause();$('time').value=0;draw();};
+$('policy').onchange=draw;
+$('time').oninput=()=>{pause();draw();};
+draw();
+</script>
+</html>
