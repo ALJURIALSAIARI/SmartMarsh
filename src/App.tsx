@@ -93,9 +93,16 @@ function initialPage(): Page {
   const hash = window.location.hash.slice(1);
   return pages.some((p) => p.id === hash) ? (hash as Page) : "simulation";
 }
+const SETTINGS_STORAGE_KEY = "smartmarsh-settings-v2";
 function initialSettings() {
   try {
-    return validSettings(JSON.parse(localStorage.getItem("smartmarsh-settings-v1") ?? "null"));
+    const current = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (current !== null) return validSettings(JSON.parse(current));
+    // One-time factor migration: preserve playback, replace old environmental values.
+    const legacy = validSettings(
+      JSON.parse(localStorage.getItem("smartmarsh-settings-v1") ?? "null"),
+    );
+    return { ...legacy, idleRate: DEFAULTS.idleRate, co2Factor: DEFAULTS.co2Factor };
   } catch {
     return { ...DEFAULTS };
   }
@@ -116,7 +123,7 @@ export default function App() {
   const current = pages.find((p) => p.id === page)!;
   useEffect(() => {
     try {
-      localStorage.setItem("smartmarsh-settings-v1", JSON.stringify(settings));
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     } catch {
       setToast("Browser storage is unavailable. Settings will last for this session only.");
     }

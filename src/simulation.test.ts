@@ -5,6 +5,7 @@ import {
   SERVICE_DURATIONS,
   INITIAL_RELEASES,
   DEFAULTS,
+  REPORT_FACTORS,
   simulate,
   metrics,
   idleMinutes,
@@ -16,6 +17,21 @@ import {
 
 const traditional = simulate(DEFAULTS, "traditional"),
   smart = simulate(DEFAULTS, "smart");
+assert.deepEqual(REPORT_FACTORS, {
+  litersPerUSGallon: 3.785411784,
+  idleUSGallonsPerHour: 0.8,
+  co2KgPerUSGallon: 10.21,
+});
+assert.equal(DEFAULTS.idleRate, 0.8 * 3.785411784);
+assert.equal(DEFAULTS.co2Factor, 10.21 / 3.785411784);
+const avoidedIdle = metrics(traditional).idle - metrics(smart).idle;
+assert.equal(avoidedIdle, 65);
+const avoidedFuel = metrics(traditional).fuel - metrics(smart).fuel;
+const avoidedCo2 = metrics(traditional).co2 - metrics(smart).co2;
+assert.ok(Math.abs(avoidedFuel - (65 / 60) * 0.8 * 3.785411784) < 1e-12);
+assert.ok(Math.abs(avoidedCo2 - (65 / 60) * 0.8 * 10.21) < 1e-12);
+assert.equal(avoidedFuel.toFixed(2), "3.28");
+assert.equal(avoidedCo2.toFixed(2), "8.85");
 for (const [run, expected] of [
   [traditional, [69, 8.625, 9.625, 14.875, 32, 4, 8]],
   [smart, [4, 10.875, 14.875, 20.125, 42, 4, 24]],
@@ -32,6 +48,15 @@ for (const [run, expected] of [
   assert.equal(m.utilization.toFixed(1), "61.9");
   assert.equal(m.fuel, (m.idle / 60) * DEFAULTS.idleRate);
   assert.equal(m.co2, m.fuel * DEFAULTS.co2Factor);
+  assert.ok(Math.abs(m.fuel - (m.idle / 60) * 0.8 * 3.785411784) < 1e-12);
+  assert.ok(Math.abs(m.co2 - (m.idle / 60) * 0.8 * 10.21) < 1e-12);
+  const oldFactors = simulate({ ...DEFAULTS, idleRate: 2.5, co2Factor: 2.68 }, run.mode);
+  assert.deepEqual(oldFactors.trucks, run.trucks, "factor correction never changes truck timings");
+  assert.deepEqual(
+    oldFactors.events,
+    run.events,
+    "factor correction never changes the event trace",
+  );
   assert.deepEqual(
     run.trucks.map((t) => t.arrival),
     [...ARRIVALS],
@@ -177,7 +202,7 @@ assert.deepEqual(
   "speed only affects playback",
 );
 const factors = simulate(
-  { ...DEFAULTS, idleRate: 5, co2Factor: DEFAULTS.co2Factor * 1.5 },
+  { ...DEFAULTS, idleRate: DEFAULTS.idleRate * 2, co2Factor: DEFAULTS.co2Factor * 1.5 },
   "traditional",
 );
 assert.deepEqual(factors.trucks, traditional.trucks);
@@ -188,5 +213,5 @@ assert.equal(
   '"event","minutes"\r\n"Quoted ""event"",\nsecond line","0.1234567890123456"',
 );
 console.log(
-  "Passed: exact appendix metrics for both modes; T1 event trace; 8 trucks / 2 gates; initial service and shared utilization; 338 quarter-minute snapshots; FCFS and gate exclusion; legacy settings migration; speed/factor independence; CSV precision.",
+  "Passed: exact appendix metrics for both modes; T1 event trace; 8 trucks / 2 gates; initial service and shared utilization; 338 quarter-minute snapshots; FCFS and gate exclusion; report US-gallon conversions and 3.28 L / 8.85 kg avoided; unchanged event traces; speed/factor independence; CSV precision.",
 );

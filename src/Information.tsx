@@ -33,14 +33,14 @@ export function Equations() {
         </p>
       </div>
       <div>
-        <span>IDLING DIESEL</span>
+        <span>ESTIMATED IDLING DIESEL</span>
         <code>(idle minutes / 60) × L/h</code>
-        <p>Sum over all trucks up to the snapshot.</p>
+        <p>Simulated estimate for stationary engine-on time up to the snapshot.</p>
       </div>
       <div>
-        <span>IDLING CO₂</span>
+        <span>ESTIMATED IDLING CO₂</span>
         <code>diesel liters × kg CO₂/L</code>
-        <p>Idling tank-to-wheel CO₂ only, not whole-trip emissions.</p>
+        <p>Simulated stationary engine-on tank-to-wheel estimate, not whole-trip emissions.</p>
       </div>
       <div>
         <span>GATE UTILIZATION</span>
@@ -109,14 +109,14 @@ export function Results(p: PairProps) {
               <div className="conclusion-icon">
                 <Leaf size={23} />
               </div>
-              <span className="eyebrow">ENVIRONMENTAL OUTCOME</span>
+              <span className="eyebrow">SIMULATED ENVIRONMENTAL ESTIMATE</span>
               <h3>
                 {fixed(a.co2 - b.co2, 2)} kg CO₂ {a.co2 >= b.co2 ? "avoided" : "additional"}
               </h3>
               <p>
                 Engine-off staging {saved > 0 ? "removed" : "did not reduce"} {fixed(saved)}{" "}
-                stationary idling minutes, equivalent to {fixed(a.fuel - b.fuel, 2)} liters of
-                diesel under the configured idle assumptions.
+                stationary idling minutes, equivalent to an estimated {fixed(a.fuel - b.fuel, 2)}{" "}
+                liters of diesel under the configured stationary engine-on assumptions.
               </p>
               <Delta before={a.idle} after={b.idle} />
             </div>
@@ -185,9 +185,10 @@ export function Results(p: PairProps) {
                 <span>03</span>
                 <p>
                   <b>Environmental benefits are assumption-dependent.</b> At{" "}
-                  {p.smart.settings.idleRate} L/h and {p.smart.settings.co2Factor} kg CO₂/L, this
-                  run’s SmartMarsh idling emissions total {fixed(b.co2, 2)} kg. Changing fuel or
-                  emission factors changes environmental estimates, never the fixed schedule.
+                  {fixed(p.smart.settings.idleRate, 6)} L/h and{" "}
+                  {fixed(p.smart.settings.co2Factor, 6)} kg CO₂/L, this run’s simulated SmartMarsh
+                  stationary idling emissions total {fixed(b.co2, 2)} kg. Changing fuel or emission
+                  factors changes environmental estimates, never the fixed schedule.
                 </p>
               </div>
             </div>

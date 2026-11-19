@@ -53,6 +53,14 @@ Reduction in stationary engine-on time: `(69 − 4) / 69 × 100 = 94.2%` display
 Mean turnaround increases separately by `20.125 − 14.875 = 5.25 min/truck`.
 All calculations retain full precision; rounding is display-only.
 
+Fuel and CO₂ are simulated estimates for stationary engine-on time only.
+Report defaults are 0.8 US gal/h and 10.21 kg CO₂/US gal, converted using
+exactly 3.785411784 L/US gal. Calculations use `0.8 × 3.785411784` L/h and
+`10.21 / 3.785411784` kg/L without rounding. The 65 truck-minutes avoided
+correspond to approximately 3.28 L diesel and 8.85 kg CO₂ avoided.
+Saved v1 settings migrate once to these defaults; later factor edits are
+retained in v2 settings. Factors remain editable and never affect event timing.
+
 SmartMarsh T1: arrival 0, eligibility 1, call/G1 reservation 4,
 acknowledgement/preparation 4.5, departure 5, service start 7, completion 12.
 Optional driver-preview clicks are labeled separately and never change the

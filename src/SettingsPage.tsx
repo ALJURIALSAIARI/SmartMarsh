@@ -16,6 +16,7 @@ import {
   SERVICE_DURATIONS,
   INITIAL_RELEASES,
   DEFAULTS,
+  REPORT_FACTORS,
   LIMITS,
   validSettings,
   type Settings,
@@ -33,15 +34,15 @@ const fields = [
     key: "idleRate",
     label: "Diesel idle consumption",
     unit: "L/h",
-    step: 0.1,
-    help: "Applied only to stationary engine-on minutes.",
+    step: "any",
+    help: `Default: ${REPORT_FACTORS.idleUSGallonsPerHour} US gal/h × ${REPORT_FACTORS.litersPerUSGallon} L/US gal. Stationary engine-on only.`,
   },
   {
     key: "co2Factor",
     label: "Diesel CO₂ factor",
     unit: "kg/L",
-    step: 0.01,
-    help: "Tank-to-wheel CO₂ for stationary idling only.",
+    step: "any",
+    help: `Default: ${REPORT_FACTORS.co2KgPerUSGallon} kg CO₂/US gal ÷ ${REPORT_FACTORS.litersPerUSGallon} L/US gal. Stationary engine-on only.`,
   },
 ] as const;
 
@@ -187,7 +188,7 @@ export default function SettingsPage({
           </Panel>
           <Panel
             title="Environmental factors"
-            subtitle="These assumptions change fuel and CO₂, never the truck schedule."
+            subtitle="Simulated stationary engine-on estimates only; factors never change the truck schedule."
             action={<Fuel size={18} className="teal-text" />}
           >
             {input(["idleRate", "co2Factor"])}

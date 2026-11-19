@@ -30,7 +30,18 @@ export interface Settings {
   idleRate: number;
   co2Factor: number;
 }
-export const DEFAULTS: Settings = { trucks: 8, gates: 2, speed: 2, idleRate: 2.5, co2Factor: 2.68 };
+export const REPORT_FACTORS = {
+  litersPerUSGallon: 3.785411784,
+  idleUSGallonsPerHour: 0.8,
+  co2KgPerUSGallon: 10.21,
+} as const;
+export const DEFAULTS: Settings = {
+  trucks: 8,
+  gates: 2,
+  speed: 2,
+  idleRate: REPORT_FACTORS.idleUSGallonsPerHour * REPORT_FACTORS.litersPerUSGallon,
+  co2Factor: REPORT_FACTORS.co2KgPerUSGallon / REPORT_FACTORS.litersPerUSGallon,
+};
 export const LIMITS: Record<keyof Settings, [number, number]> = {
   trucks: [8, 8],
   gates: [2, 2],

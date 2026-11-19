@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import * as XLSX from "xlsx";
 
 const title = "SmartMarsh Simulation";
+const reportIdleRate = 0.8 * 3.785411784;
+const reportCo2Factor = 10.21 / 3.785411784;
 async function navigate(page: Page, name: string) {
   const menu = page.getByRole("button", { name: "Open navigation", exact: true });
   if (await menu.isVisible()) await menu.click();
@@ -136,6 +138,9 @@ for (const width of [1440, 390]) {
         page.locator(".simulation-kpis .kpi").nth(2).locator(".kpi-value"),
       ).toContainText(mode === "Traditional" ? "69.0" : "4.0");
       await expect(page.locator(".gate-row .badge")).toHaveText(["AVAILABLE", "AVAILABLE"]);
+      await expect(
+        page.locator(".simulation-kpis .kpi").nth(3).locator(".kpi-value"),
+      ).toContainText(mode === "SmartMarsh" ? "8.85" : "0.00");
       await expect(page.locator(".scene-truck")).toHaveCount(0);
       await page.getByRole("button", { name: "Run again", exact: true }).click();
       await page.getByRole("button", { name: "Reset simulation", exact: true }).click();
@@ -160,6 +165,8 @@ test("dashboard, all charts and results use exact appendix totals and shared uti
   for (const [label, a, b] of [
     ["Completed trucks", "8", "8"],
     ["Stationary engine-on time", "69.000", "4.000"],
+    ["Estimated idling diesel", "3.483", "0.202"],
+    ["Estimated idling CO₂", "9.393", "0.545"],
     ["Mean eligible queue time", "8.625", "10.875"],
     ["Mean pre-service time", "9.625", "14.875"],
     ["Mean truck turnaround", "14.875", "20.125"],
@@ -175,6 +182,22 @@ test("dashboard, all charts and results use exact appendix totals and shared uti
     await expect(row.locator("td").nth(1)).toContainText(a);
     await expect(row.locator("td").nth(2)).toContainText(b);
   }
+  await expect(page.locator(".analytics-kpis .kpi").nth(3).locator(".kpi-value")).toContainText(
+    "0.20",
+  );
+  await expect(page.locator(".analytics-kpis .kpi").nth(4).locator(".kpi-value")).toContainText(
+    "0.54",
+  );
+  for (const [chartIndex, values] of [
+    [1, ["3.48 L", "0.20 L"]],
+    [2, ["9.39 kg", "0.54 kg"]],
+  ] as const) {
+    const chart = page.locator(".environment-charts .mini-chart").nth(chartIndex);
+    for (const [index, value] of values.entries()) {
+      await chart.locator(".recharts-bar-rectangle").nth(index).hover();
+      await expect(chart.locator(".recharts-tooltip-wrapper")).toContainText(value);
+    }
+  }
   const gateChart = page.locator(".chart-grid .panel").last();
   await expect(gateChart).toContainText("G1");
   await expect(gateChart).toContainText("G2");
@@ -188,6 +211,12 @@ test("dashboard, all charts and results use exact appendix totals and shared uti
     "+5.25 min mean turnaround",
   );
   await expect(page.locator(".conclusion-card").last()).toContainText("8 / 8 trucks completed");
+  await expect(page.locator(".conclusion-card.positive h3")).toContainText("8.85 kg CO₂ avoided");
+  await expect(page.locator(".conclusion-card.positive p")).toContainText("65.0");
+  await expect(page.locator(".conclusion-card.positive p")).toContainText("estimated 3.28 liters");
+  await expect(page.locator(".conclusion-card.positive")).toContainText(
+    "SIMULATED ENVIRONMENTAL ESTIMATE",
+  );
   await page.evaluate(() => {
     window.print = () => {
       document.body.dataset.printed = "yes";
@@ -215,11 +244,50 @@ test("both truck registers and actual CSV/XLSX exports include all eight correct
     const rows = csvRows(await readFile((await (await waiting).path())!, "utf8"));
     expect(rows.map((r) => r.truck)).toEqual(["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]);
     expect(rows.reduce((sum, r) => sum + Number(r.stationary_engine_on_idle_min), 0)).toBe(idleSum);
+    for (const row of rows) {
+      expect(row.diesel_idle_L_per_h).toBe(reportIdleRate);
+      expect(row.diesel_CO2_kg_per_L).toBe(reportCo2Factor);
+      expect(row.estimate_scope).toBe("SIMULATED ESTIMATE — stationary engine-on time only");
+      expect(Number(row.idle_fuel_L)).toBeCloseTo(
+        (Number(row.stationary_engine_on_idle_min) / 60) * reportIdleRate,
+        12,
+      );
+      expect(Number(row.idle_CO2_kg)).toBeCloseTo(Number(row.idle_fuel_L) * reportCo2Factor, 12);
+    }
+    expect(rows.reduce((sum, row) => sum + Number(row.idle_fuel_L), 0)).toBeCloseTo(
+      (idleSum / 60) * reportIdleRate,
+      12,
+    );
+    expect(rows.reduce((sum, row) => sum + Number(row.idle_CO2_kg), 0)).toBeCloseTo(
+      (idleSum / 60) * 0.8 * 10.21,
+      12,
+    );
     expect(Math.max(...rows.map((r) => Number(r.service_end_min)))).toBe(finish);
     const xlsxWait = page.waitForEvent("download");
     await page.getByRole("button", { name: "Export XLSX", exact: true }).click();
     const book = XLSX.read(await readFile((await (await xlsxWait).path())!));
     expect(book.SheetNames).toEqual(["Truck data", "Event log", "Assumptions"]);
+    const exportedRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+      book.Sheets["Truck data"],
+    );
+    expect(exportedRows.reduce((sum, row) => sum + Number(row.idle_fuel_L), 0)).toBeCloseTo(
+      (idleSum / 60) * reportIdleRate,
+      12,
+    );
+    expect(exportedRows.reduce((sum, row) => sum + Number(row.idle_CO2_kg), 0)).toBeCloseTo(
+      (idleSum / 60) * 0.8 * 10.21,
+      12,
+    );
+    const assumptions = XLSX.utils.sheet_to_json<{ parameter: string; value: string }>(
+      book.Sheets["Assumptions"],
+    );
+    expect(Number(assumptions.find((r) => r.parameter === "idleRate")!.value)).toBe(reportIdleRate);
+    expect(Number(assumptions.find((r) => r.parameter === "co2Factor")!.value)).toBe(
+      reportCo2Factor,
+    );
+    expect(assumptions.find((r) => r.parameter === "estimate_scope")!.value).toContain(
+      "simulated stationary engine-on estimates",
+    );
     const eventRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets["Event log"]);
     expect(eventRows).toHaveLength(events);
     expect(
@@ -298,7 +366,8 @@ test("legacy settings cannot restore extra trucks or gates; only playback and en
   page,
 }) => {
   await page.goto("/");
-  await page.evaluate(() =>
+  await page.evaluate(() => {
+    localStorage.removeItem("smartmarsh-settings-v2");
     localStorage.setItem(
       "smartmarsh-settings-v1",
       JSON.stringify({
@@ -311,8 +380,8 @@ test("legacy settings cannot restore extra trucks or gates; only playback and en
         idleRate: 2.5,
         co2Factor: 2.68,
       }),
-    ),
-  );
+    );
+  });
   await page.reload();
   await expect(page.locator(".gate-row")).toHaveCount(2);
   await navigate(page, "Settings");
@@ -322,6 +391,22 @@ test("legacy settings cannot restore extra trucks or gates; only playback and en
     "",
   );
   await expect(page.getByLabel("Service gates", { exact: true })).toHaveValue("2");
+  await expect(page.getByLabel("Diesel idle consumption", { exact: true })).toHaveValue(
+    String(reportIdleRate),
+  );
+  await expect(page.getByLabel("Diesel CO₂ factor", { exact: true })).toHaveValue(
+    String(reportCo2Factor),
+  );
+  expect(
+    await page
+      .getByLabel("Diesel idle consumption", { exact: true })
+      .evaluate((input) => (input as HTMLInputElement).checkValidity()),
+  ).toBe(true);
+  expect(
+    await page
+      .getByLabel("Diesel CO₂ factor", { exact: true })
+      .evaluate((input) => (input as HTMLInputElement).checkValidity()),
+  ).toBe(true);
   await page.getByLabel("Playback speed", { exact: true }).fill("99");
   await page.getByRole("button", { name: "Save & apply settings" }).click();
   await expect(page.getByText("Enter a number from 0.5 to 20.")).toBeVisible();
@@ -335,12 +420,23 @@ test("legacy settings cannot restore extra trucks or gates; only playback and en
   await page.reload();
   await expect(page.getByLabel("Playback speed", { exact: true })).toHaveValue("5");
   await expect(page.getByLabel("Diesel idle consumption", { exact: true })).toHaveValue("3");
+  await expect(page.getByLabel("Diesel CO₂ factor", { exact: true })).toHaveValue("2.5");
   await navigate(page, "Simulation");
   await page.getByRole("button", { name: "Run paired comparison", exact: true }).click();
   await expect(page.locator(".analytics-kpis .kpi").nth(2)).toContainText("4.0");
+  await expect(page.locator(".analytics-kpis .kpi").nth(4).locator(".kpi-value")).toContainText(
+    "0.50",
+  );
   await navigate(page, "Settings");
   await page.getByRole("button", { name: "Restore defaults" }).click();
   await page.getByRole("button", { name: "Save & apply settings" }).click();
+  await page.reload();
+  await expect(page.getByLabel("Diesel idle consumption", { exact: true })).toHaveValue(
+    String(reportIdleRate),
+  );
+  await expect(page.getByLabel("Diesel CO₂ factor", { exact: true })).toHaveValue(
+    String(reportCo2Factor),
+  );
   await navigate(page, "Simulation");
   await expect(page.getByRole("slider", { name: "Simulation timeline" })).toHaveValue("0");
   await expect(page.locator(".gate-row .badge")).toHaveText(["BUSY", "BUSY"]);

@@ -17,6 +17,7 @@ import {
   SERVICE_DURATIONS,
   TIMING,
   INITIAL_RELEASES,
+  REPORT_FACTORS,
   clock,
   fixed,
   idleMinutes,
@@ -114,6 +115,9 @@ export default function TruckData({
       idle_fuel_L: (idleMinutes(t, mode, now) / 60) * run.settings.idleRate,
       idle_CO2_kg:
         (idleMinutes(t, mode, now) / 60) * run.settings.idleRate * run.settings.co2Factor,
+      diesel_idle_L_per_h: run.settings.idleRate,
+      diesel_CO2_kg_per_L: run.settings.co2Factor,
+      estimate_scope: "SIMULATED ESTIMATE — stationary engine-on time only",
       snapshot_min: now,
     };
   }
@@ -161,6 +165,12 @@ export default function TruckData({
               value: String(value),
             })),
             { parameter: "disclaimer", value: "SIMULATED ASSUMPTIONS, NOT MEASURED PORT DATA" },
+            {
+              parameter: "estimate_scope",
+              value:
+                "Fuel and CO₂ are simulated stationary engine-on estimates only; travel and service excluded.",
+            },
+            { parameter: "report_default_factors", value: JSON.stringify(REPORT_FACTORS) },
             {
               parameter: "time_units",
               value: "Minutes from simulation origin; future timestamps withheld",

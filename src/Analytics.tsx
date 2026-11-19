@@ -35,8 +35,8 @@ export interface PairProps {
 export const compareRows = [
   { key: "completed", label: "Completed trucks", unit: "trucks", inverse: true },
   { key: "idle", label: "Stationary engine-on time", unit: "truck-min", inverse: false },
-  { key: "fuel", label: "Idling diesel consumed", unit: "L", inverse: false },
-  { key: "co2", label: "Idling CO₂ emissions", unit: "kg", inverse: false },
+  { key: "fuel", label: "Estimated idling diesel", unit: "L", inverse: false },
+  { key: "co2", label: "Estimated idling CO₂", unit: "kg", inverse: false },
   { key: "waiting", label: "Mean eligible queue time", unit: "min/truck", inverse: false },
   { key: "preService", label: "Mean pre-service time", unit: "min/truck", inverse: false },
   { key: "turnaround", label: "Mean truck turnaround", unit: "min/truck", inverse: false },
@@ -241,18 +241,18 @@ export default function Analytics(p: PairProps) {
           accent="amber"
         />
         <Kpi
-          title="Idling fuel"
+          title="Estimated idling fuel"
           value={fixed(m.fuel, 2)}
           unit="L"
           icon={Fuel}
-          detail={`Diesel idle rate: ${p.smart.settings.idleRate} L/h`}
+          detail={`Simulated · ${fixed(p.smart.settings.idleRate, 6)} L/h`}
         />
         <Kpi
-          title="Idling CO₂"
+          title="Estimated idling CO₂"
           value={fixed(m.co2, 2)}
           unit="kg"
           icon={Leaf}
-          detail={`Emission factor: ${p.smart.settings.co2Factor} kg/L`}
+          detail={`Simulated · ${fixed(p.smart.settings.co2Factor, 6)} kg/L`}
           accent="green"
         />
         <Kpi
@@ -299,7 +299,7 @@ export default function Analytics(p: PairProps) {
       </div>
       <Panel
         title="The environmental difference"
-        subtitle="Stationary engine-on emissions only. Moving time and service are excluded."
+        subtitle="Simulated estimates for stationary engine-on time only. Travel and service are excluded."
         action={
           <div className="chart-legend">
             <span>
@@ -316,8 +316,8 @@ export default function Analytics(p: PairProps) {
         <div className="environment-charts">
           {[
             { key: "idle", name: "Stationary engine-on time", unit: "truck-min" },
-            { key: "fuel", name: "Diesel consumed", unit: "L" },
-            { key: "co2", name: "CO₂ emissions", unit: "kg" },
+            { key: "fuel", name: "Estimated diesel", unit: "L" },
+            { key: "co2", name: "Estimated CO₂", unit: "kg" },
           ].map(({ key, name, unit }) => (
             <div className="mini-chart" key={key}>
               <h3>

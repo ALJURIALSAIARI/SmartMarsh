@@ -135,11 +135,11 @@ export default function SimulationView(p: Props) {
           accent="amber"
         />
         <Kpi
-          title="CO₂ avoided"
+          title="Estimated CO₂ avoided"
           value={fixed(Math.max(0, baseline.co2 - m.co2), 2)}
           unit="kg"
           icon={Leaf}
-          detail="Against Traditional at this timestamp"
+          detail="Simulated · stationary engine-on only"
           accent="teal"
         />
       </div>
