@@ -5,10 +5,10 @@ import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   // Relative assets work on both root domains and GitHub repository subpaths.
-  base: "/SmartMarsh/",
+  base: "./",
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./", import.meta.url)) },
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   server: {
     host: "0.0.0.0",

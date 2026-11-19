@@ -1,102 +1,62 @@
-# SmartMarsh
+# SmartMarsh Simulation
 
-A browser-only, deterministic port-truck marshalling experiment built with React,
-TypeScript, Tailwind CSS and Recharts.
+The original Simulation menu opens the appendix model directly. There is no
+separate assignment page, tab, link or alternative random demo.
 
-**SIMULATED ASSUMPTIONS, NOT MEASURED PORT DATA.**
+## Fixed inputs and timing (minutes)
 
-## Using the application
+- Tracked trucks: T1–T8. Gates: G1 and G2.
+- Arrivals: `[0, 1, 2, 4, 7, 8, 11, 14]`.
+- Service durations: `[5, 6, 4, 7, 5, 6, 4, 5]`.
+- Initial gate release: G1 at 4, G2 at 6. Earlier traffic is not a tracked truck.
+- Traditional: eligible at arrival; stationary engine-on queue; 1 minute travel.
+- SmartMarsh: 1 minute moving to staging; engine-off queue; after call,
+  0.5 minute engine-off acknowledgement, 0.5 minute stationary engine-on
+  preparation, and 2 minutes travel to the gate.
+- FCFS among eligible trucks. Input order breaks truck ties; G1 breaks gate
+  ties at call time. A call reserves the gate exclusively through service finish.
 
-1. Open **Settings** to configure truck count, gates, distributions, timings,
-   seed, playback speed and environmental factors. Save applies the inputs to
-   both modes, resets playback and persists settings in this browser.
-2. On **Simulation**, start, pause, resume, reset or scrub the event timeline.
-   Switching modes displays the alternative at the same elapsed time.
-   Select any visible truck, or use the driver selector, to inspect its journey.
-   The event log exposes the complete history with pagination, truck/category
-   filters and CSV export of all matching records, not just the visible page.
-3. **Run paired comparison** computes and reveals both completed experiments
-   instantly; it does not use playback speed to calculate results.
-4. **Analytics Dashboard** provides ten KPIs, six charts and a paired table.
-5. **Truck Data Table** supports search, state filters, every-column sorting,
-   pagination and individual truck event timelines. CSV and native XLSX exports
-   contain all filtered records, not only the current page. Future event times
-   and gate assignments are withheld at live snapshots.
-6. **Results & Conclusions** generates conclusions only after both runs complete,
-   and supports printing/saving a report via the browser print dialog.
-7. **About the Project** documents the model, equations and limitations.
+`src/simulation.ts` generates the deterministic schedules and timestamped events.
+The SVG terminal, gate monitor, driver view, live log, registers, charts, metrics,
+CSV and XLSX all consume those same run objects.
 
-## Deterministic discrete-event model
+Only playback speed, diesel idle rate and CO₂ factor are adjustable. Old saved
+demand settings are ignored. Fresh loads and Reset always use the fixed model.
+No accounts, server storage or remote services are used.
 
-`src/simulation.ts` is independent of React and wall-clock playback:
+## Metric definitions and expected completed results
 
-- A Mulberry32 PRNG seeded by the configured integer produces an identical
-  arrival time and service-duration input for each truck in both modes.
-- First arrival is at zero. Subsequent interarrival times follow a seeded
-  exponential distribution with the configured mean.
-- Each service requirement is sampled uniformly between 60% and 140% of the
-  configured mean. This is a distribution mean, not a forced sample average.
-- Check-in is parallel and has a fixed configured duration in both modes.
-- A time-ordered event queue processes check-in and service-completion events.
-  Completions are processed before check-ins at the same timestamp.
-- FCFS waiting trucks are assigned exclusively to currently free gates.
-  A gate becomes **RESERVED** atomically at dispatch, **BUSY** at service start
-  and is released at service completion. It cannot receive a second assignment
-  before the first completes.
-- SmartMarsh has a fixed six-second engine-off notification reaction delay.
-  Traditional has no notification delay. Travel time is identical in both modes.
-- Traditional engines stay on during check-in and queue waiting.
-  SmartMarsh engines stay on only during check-in, then switch off while staging
-  and reacting to the dispatch notification.
-- Engines are off during service in both modes. Movement is never counted as idle.
-- Driver acknowledgment is an interactive preview, not a change to the modeled
-  reaction delay. Otherwise human click timing would invalidate determinism.
-  Its timestamp is retained across page navigation, is labeled as driver-preview
-  telemetry in the event log/export, and never contributes to engineering metrics.
-  Reset and a new run clear acknowledgments; rewinding discards later acknowledgments.
-- CHECKED IN and AT GATE are instantaneous events. The animated scene displays
-  the positive-duration state at each timestamp, while the full event log retains
-  these transitions.
-- Playback speed is strictly a wall-clock presentation setting:
-  1× equals one simulated minute per real second.
+| Metric                                   | Traditional | SmartMarsh |
+| ---------------------------------------- | ----------: | ---------: |
+| Stationary engine-on time (truck-min)    |          69 |          4 |
+| Mean eligible queue time (min/truck)     |       8.625 |     10.875 |
+| Mean pre-service time (min/truck)        |       9.625 |     14.875 |
+| Mean turnaround (min/truck)              |      14.875 |     20.125 |
+| Final truck completion (min)             |          32 |         42 |
+| Peak eligible queue (trucks)             |           4 |          4 |
+| Pre-service gate reservations (gate-min) |           8 |         24 |
+| Shared-window service utilization        |       61.9% |      61.9% |
 
-All scene positions, service progress, gate states, logs, exports and metrics
-derive from this shared schedule.
+Stationary engine-on time is arrival-to-call in Traditional and acknowledgement-
+to-departure in SmartMarsh. Travel, service and engine-off waiting/response are
+excluded. Queue wait is eligibility-to-call; pre-service is arrival-to-service;
+turnaround is arrival-to-completion. Peak queue counts uncalled eligible trucks
+after all calls at each timestamp.
 
-## Metrics
+The shared playback/observation window ends at the later completion, derived
+from both schedules (42 minutes). Utilization includes 42 tracked service
+minutes and 10 initial service gate-minutes: `52 / (2 × 42) × 100`.
+Live partial snapshots use the same elapsed window in both policies, and means
+include completed tracked trucks only.
 
-Time is stored in minutes at full numerical precision; displayed HH:MM:SS clocks
-are truncated to whole seconds.
+Reduction in stationary engine-on time: `(69 − 4) / 69 × 100 = 94.2%` displayed.
+Mean turnaround increases separately by `20.125 − 14.875 = 5.25 min/truck`.
+All calculations retain full precision; rounding is display-only.
 
-- Turnaround = service end − arrival.
-- Queue/staging wait = dispatch − check-in completion.
-- Stationary engine-on idle = check-in time + engine-on queue wait.
-- Idling diesel (L) = idle minutes / 60 × configured L/h.
-- Idling CO₂ (kg) = diesel liters × configured kg/L.
-- Gate utilization (%) = summed service time / (gate count × horizon) × 100.
-- Throughput (trucks/h) = completed trucks / horizon × 60.
-- Peak queue = maximum checked-in, not-yet-dispatched truck count over event times.
-
-Live cumulative fuel/idling metrics include elapsed intervals for all trucks.
-Mean wait and turnaround include completed trucks only. A live comparison uses
-the same elapsed timestamp. Completed-run metrics use each mode's own final
-clearance horizon, measured from the common time-zero first arrival.
-Before any truck completes, mean waiting and turnaround are displayed as
-unavailable (—), not as a fictitious zero-minute result. Table sorting keeps
-unrevealed future events last in either direction without using their hidden values.
-Throughput and utilization are likewise unavailable until a positive horizon elapses.
-
-The model does **not** assume SmartMarsh improves waiting or turnaround. Its
-notification response can make both worse and lower throughput/utilization;
-generated conclusions explicitly report these effects.
-
-## Scope
-
-Staging is unlimited. Roads, check-in and staging do not block. Gates are identical.
-No breakdowns, gate specialties, acceleration fuel, driving emissions, service
-emissions, real-world driver response distributions or site-measured data are
-modeled. Carbon results represent stationary idling only, not whole-trip savings.
-Only settings are stored locally; experiment records remain in memory.
+SmartMarsh T1: arrival 0, eligibility 1, call/G1 reservation 4,
+acknowledgement/preparation 4.5, departure 5, service start 7, completion 12.
+Optional driver-preview clicks are labeled separately and never change the
+modeled acknowledgement or schedule.
 
 ## Verification
 
@@ -107,24 +67,12 @@ pnpm test
 pnpm typecheck
 pnpm test:e2e
 pnpm build
-pnpm format <changed-files>
 ```
 
-Install a Playwright Chromium browser if required with
-`pnpm exec playwright install chromium`. Browser tests target the existing server
-at `http://localhost:3000`; set `PLAYWRIGHT_BASE_URL` to use another preview address.
-
-Engine checks cover 12 paired 100-truck scenarios (2,400 truck journeys), seeded
-reproducibility, shared inputs, independent FCFS schedule recurrence, exclusive
-gate reservations, timestamp ordering, emissions equations, utilization,
-turnaround, travel exclusion and speed independence.
-Additional checks verify each operating/environmental setting, zero-idling
-scenarios, and CSV quoting/full numerical precision.
-
-Browser tests exercise playback, end-of-timeline precision, notifications,
-acknowledgment, paired comparison, six charts, ten KPIs, settings validation and
-persistence, search/sort/pagination, CSV content, native XLSX sheets and values,
-report printing, all six navigation destinations and mobile viewport overflow.
-They also verify acknowledgement retention, complete event-history pagination and
-filtered exports, unavailable live averages, hidden future timestamps and the
-preserved schema of empty workbooks.
+Unit tests verify every expected metric, initial traffic, the complete T1 trace,
+FCFS and gate exclusivity at quarter-minute snapshots, fixed settings migration,
+and precision. Browser tests exercise the original homepage/menu, terminal and
+log synchronization, both policies, desktop/mobile playback and navigation,
+dashboard/charts, CSV/XLSX exports, driver-preview telemetry and settings.
+`python3 scripts/export-github.py` refreshes the portable source ZIP and the
+browser-download payload.
